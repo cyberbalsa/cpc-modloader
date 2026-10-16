@@ -17,7 +17,7 @@ class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="cpc launcher ")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()  # Expand Windows' RUNNER~1 temp alias.
         self.game = self.root / "original game"
         (self.game / "assets/scripts").mkdir(parents=True)
         (self.game / "assets/scripts/main.lua").write_text("return 1\n")
