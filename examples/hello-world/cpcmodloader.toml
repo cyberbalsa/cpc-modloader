@@ -1,0 +1,29 @@
+[manifest]
+version = "1.0.0"
+priority = 0
+
+[vars]
+message = "Hello from cpcmodloader!"
+
+[[patches]]
+[patches.module]
+name = "cpc_example"
+source = "hello.lua"
+before = "ui_screens/StartupScreen.lua"
+
+[[patches]]
+[patches.copy]
+target = "ui_screens/StartupScreen.lua"
+position = "prepend"
+payload = '''
+_G.cpcmodloader.require("cpc_example").hello("{{cpcmodloader:message}}")
+'''
+
+[[patches]]
+[patches.pattern]
+target = "ui_screens/MainMenu.lua"
+pattern = 'local paletteGenerator = include("scripts/ui_screens/palette_generator")'
+position = "after"
+payload = '_G.cpcmodloader.log("Main menu patch active")'
+match_indent = true
+expected_matches = 1

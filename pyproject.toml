@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cpc-modloader"
+version = "0.1.0"
+description = "Lovely-style Lua patcher and isolated launcher for Car Park Capital"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+readme = "README.md"
+dependencies = []
+
+[project.scripts]
+cpc-modloader = "cpcmodloader.cli:main"
+cpcmodloader = "cpcmodloader.cli:main"
+
+[tool.setuptools.package-data]
+cpcmodloader = ["*.lua"]
+
+[tool.setuptools.packages.find]
+include = ["cpcmodloader*"]

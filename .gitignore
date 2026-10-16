@@ -1,0 +1,10 @@
+build*/
+/.cache/
+/run/
+__pycache__/
+*.log
+*.egg-info/
+/dist/
+/.venv/
+/Mods/
+*.spec
