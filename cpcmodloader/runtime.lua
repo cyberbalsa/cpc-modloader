@@ -2,7 +2,7 @@
 do
     if not _G.cpcmodloader then
         local api = {
-            version = "0.1.0",
+            version = "__CPC_VERSION__",
             modules = {},
             loaded = {},
             loading = {},

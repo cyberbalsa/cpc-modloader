@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 
-from .patcher import PatchError, Plan
+from .patcher import PatchError, Plan, inside
 
 APP_ID = "3031880"
 OWNER = "cpcmodloader-profile.json"
@@ -213,6 +213,12 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
             if hashlib.sha256((stage / target).read_bytes()).hexdigest() != plan.original_hashes[target]:
                 raise PatchError(f"source changed during build; retry after the game update finishes: {target}")
             (stage / target).write_bytes(source.encode("utf-8"))
+        for target, data in plan.assets.items():
+            path = inside(stage, target)
+            if path.exists():
+                raise PatchError(f"generated asset would overwrite a game file: {target}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
         report = plan.report() | {"syntax_check": syntax, "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (stage / "cpcmodloader-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         if previous.exists():

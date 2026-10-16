@@ -79,6 +79,16 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual((directory / "saves/modded.sav").read_text(), "keep")
             self.assertEqual(list(self.profile.glob(".staging-*")), [])
 
+    def test_generated_assets_are_isolated_and_cannot_overwrite(self):
+        target = "assets/models/loader.glb"
+        with profile_lock(self.profile, self.game, self.mods):
+            directory = build(self.game, self.profile, Plan(assets={target: b"loader model"}), "test")
+            self.assertEqual((directory / target).read_bytes(), b"loader model")
+            self.assertFalse((self.game / target).exists())
+            with self.assertRaisesRegex(PatchError, "overwrite a game file"):
+                build(self.game, self.profile, Plan(assets={"assets/texture.dat": b"replacement"}), "test")
+            self.assertEqual((directory / target).read_bytes(), b"loader model")
+
     def test_game_update_during_build_is_rejected(self):
         with profile_lock(self.profile, self.game, self.mods):
             directory = build(self.game, self.profile, Plan(), "test")

@@ -10,6 +10,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import tomllib
 
+from . import __version__, overlay
+
 
 class PatchError(Exception):
     """A manifest cannot be safely or unambiguously applied."""
@@ -122,11 +124,17 @@ class Plan:
     original_hashes: dict[str, str] = field(default_factory=dict)
     events: list[dict] = field(default_factory=list)
     manifests: list[str] = field(default_factory=list)
+    mods: list[str] = field(default_factory=list)
+    assets: dict[str, bytes] = field(default_factory=dict)
 
     def report(self):
         return {
             "format": 1,
             "manifests": self.manifests,
+            "loader_version": __version__,
+            "mods": self.mods,
+            "mod_count": len(self.mods),
+            "generated_assets": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(self.assets.items())},
             "patches": self.events,
             "files": {
                 name: {"original_sha256": self.original_hashes[name],
@@ -301,7 +309,7 @@ FIELDS = {
 
 def compile_plan(game: Path, mods: Path) -> Plan:
     manifests = discover(mods)
-    plan = Plan(manifests=[m.label for m in manifests])
+    plan = Plan(manifests=[m.label for m in manifests], mods=sorted({m.root.name for m in manifests}))
     files = sorted(p.relative_to(game).as_posix() for p in (game / "assets/scripts").rglob("*.lua"))
     work = []
     module_names = set()
@@ -379,7 +387,23 @@ def compile_plan(game: Path, mods: Path) -> Plan:
                 plan.events.append({"patch": label, "type": kind, "target": target, "matches": matches, "applied": applied})
         except PatchError as exc:
             raise PatchError(f"{label}: {exc}") from exc
+    if overlay.MENU_SCRIPT in files:
+        target = overlay.MENU_SCRIPT
+        if target not in plan.sources:
+            path = inside(game, target)
+            plan.original_hashes[target] = hashlib.sha256(path.read_bytes()).hexdigest()
+            plan.sources[target] = read_text(path)
+        body = resource_files("cpcmodloader").joinpath("overlay.lua").read_text(encoding="utf-8")
+        plan.sources[target] = join_code(plan.sources[target], body, newline(plan.sources[target]))
+        plan.assets = overlay.assets(__version__, len(plan.mods))
+        for asset in plan.assets:
+            if inside(game, asset).exists():
+                raise PatchError(f"reserved loader asset already exists in game: {asset}")
+        plan.events.append({"patch": "cpc-modloader menu label", "type": "builtin", "target": target, "matches": 1, "applied": 1})
     runtime = resource_files("cpcmodloader").joinpath("runtime.lua").read_text(encoding="utf-8")
+    runtime = runtime.replace('"__CPC_VERSION__"', json.dumps(__version__))
+    runtime += (f"\n_G.cpcmodloader.mod_count = {len(plan.mods)}\n"
+                f"_G.cpcmodloader.status = {json.dumps(overlay.label(__version__, len(plan.mods)))}\n")
     for target, source in plan.sources.items():
         prefix = runtime + "\n" + "".join(module_prefixes.get(target, []))
         plan.sources[target] = join_code(with_newlines(prefix, newline(source)), source, newline(source))

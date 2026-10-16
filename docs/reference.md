@@ -10,6 +10,8 @@
 
 Options follow the command. All commands accept `--game-dir` and `--mods-dir`. `build` and `run` accept `--profile-dir` (default `run/default`). Set `CPC_GAME_DIR` to override automatic game discovery. Pass game arguments after `--`.
 
+The main menu shows the loader version and loaded mod count in the top-left corner, including when no mods are installed. Each enabled mod folder counts once, even if it contains several manifests. Disabled folders and manifests do not count. The label disappears when you leave the main menu.
+
 Lua syntax checks run automatically when a Lua **5.4** compiler is available as `luac5.4`, `luac54`, or `luac`. Use `--luac /path/to/luac` to specify one explicitly. An explicitly requested compiler must exist and be version 5.4. Without a suitable compiler, the command clearly reports that syntax checking was skipped; manifest validation and match checks still run.
 
 The profile contains:

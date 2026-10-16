@@ -53,7 +53,7 @@ def main(argv=None) -> int:
             return 0
         plan = compile_plan(game, mods)
         syntax = syntax_check(plan, args.luac)
-        print(f"cpcmodloader {__version__}: {len(plan.manifests)} manifests, {len(plan.events)} patch applications, {len(plan.sources)} patched scripts", flush=True)
+        print(f"cpc-modloader {__version__}: {len(plan.mods)} mods, {len(plan.manifests)} manifests, {len(plan.events)} patch applications, {len(plan.sources)} patched scripts", flush=True)
         print(f"Syntax: {syntax}", flush=True)
         for event in plan.events:
             print(f"  {event['patch']} -> {event['target']} ({event['applied']}/{event['matches']} matches)", flush=True)

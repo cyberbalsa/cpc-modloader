@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from cpcmodloader.launcher import syntax_check
+from cpcmodloader import __version__, overlay
 from cpcmodloader.patcher import (
     PatchError, Plan, compile_plan, discover, inside, pattern_patch, regex_patch, relative_path, target_path,
 )
@@ -90,6 +91,80 @@ class PatcherTests(unittest.TestCase):
         self.manifest(body, "z", 0, "lovely.toml")
         with self.assertRaisesRegex(PatchError, "not both"):
             discover(self.mods)
+
+    def test_menu_label_counts_mod_folders_and_handles_zero_mods(self):
+        menu = self.game / overlay.MENU_SCRIPT
+        menu.parent.mkdir(parents=True)
+        menu.write_text("function create(menu) end\n")
+        plan = compile_plan(self.game, self.mods)
+        self.assertEqual(plan.report()["mod_count"], 0)
+        self.assertIn(f"cpc-modloader v{__version__} | 0 mods loaded", plan.sources[overlay.MENU_SCRIPT])
+        self.assertEqual(len(plan.assets), 3)
+        self.assertFalse((self.game / "assets/models/cpcmodloader_overlay.glb").exists())
+        self.manifest("", "a")
+        self.manifest("", "a", filename="cpcmodloader/second.toml")
+        disabled = self.manifest("", "disabled")
+        (disabled / ".disabled").touch()
+        self.manifest("enabled=false\n", "disabled_manifest")
+        plan = compile_plan(self.game, self.mods)
+        self.assertEqual(plan.mods, ["a"])
+        self.assertEqual(len(plan.manifests), 2)
+        self.assertIn("| 1 mod loaded", plan.sources[overlay.MENU_SCRIPT])
+        self.assertIn(f'version = "{__version__}"', plan.sources[overlay.MENU_SCRIPT])
+        self.manifest("", "b")
+        plan = compile_plan(self.game, self.mods)
+        self.assertEqual(plan.report()["mod_count"], 2)
+        self.assertIn("| 2 mods loaded", plan.sources[overlay.MENU_SCRIPT])
+
+    def test_menu_label_rejects_reserved_asset_collision(self):
+        menu = self.game / overlay.MENU_SCRIPT
+        menu.parent.mkdir(parents=True)
+        menu.write_text("function create(menu) end\n")
+        reserved = self.game / "assets/models/cpcmodloader_overlay.glb"
+        reserved.parent.mkdir()
+        reserved.write_bytes(b"existing file")
+        with self.assertRaisesRegex(PatchError, "reserved loader asset"):
+            compile_plan(self.game, self.mods)
+
+    def test_menu_label_preserves_create_and_cleans_up_on_exit(self):
+        lua = shutil.which("lua5.4") or shutil.which("lua")
+        if not lua:
+            self.skipTest("Lua interpreter not installed")
+        menu = self.game / overlay.MENU_SCRIPT
+        menu.parent.mkdir(parents=True)
+        menu.write_text("function create(menu) original_calls = (original_calls or 0) + 1 end\n")
+        script = compile_plan(self.game, self.mods).sources[overlay.MENU_SCRIPT]
+        harness = '''
+local objects, events, updates = {}, {}, {}
+gameSettings = {graphics = {uiScale = 2}}
+function loadModels(path) assert(path == "assets/models/cpcmodloader_overlay.glb") end
+function createChild(parent, name)
+    assert(parent == 42 and name == "cpcmodloader_overlay")
+    local obj = {}; objects[#objects + 1] = obj; return obj
+end
+function setComponents(obj, components) obj.shader = components[3] end
+function setTimeout(parent, delay, callback) callback() end
+function setUpdateFunction(obj, interval, callback) updates[#updates+1] = callback end
+function onEvent(name, callback) events[#events+1] = callback end
+function valid(obj) return not obj.destroyed end
+function destroyEntity(obj) obj.destroyed = true end
+function Transform() return {} end
+function RenderModel(value) return value end
+function CustomShader(value) return value end
+component = {CustomShader = {getFor = function(obj) return obj.shader end}}
+'''
+        checks = '''
+create(42); create(42)
+assert(original_calls == 2 and #objects == 2)
+gameSettings.graphics.uiScale = 3
+for _, update in ipairs(updates) do update() end
+assert(objects[1].shader.uniformsFloat.cpcScale == 3)
+for _, callback in ipairs(events) do callback(); callback() end
+assert(objects[1].destroyed and objects[2].destroyed)
+assert(cpcmodloader.mod_count == 0)
+'''
+        result = subprocess.run([lua, "-"], input=harness + script + checks, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_variables_copy_and_multiple_targets(self):
         (self.scripts / "other.lua").write_text("return 2\n", encoding="utf-8")
