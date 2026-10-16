@@ -28,7 +28,7 @@ target = "main.lua"
 position = "prepend"
 payload = "print('bundled mod')"
 ''', encoding="utf-8")
-    result = subprocess.run([str(installed), "build"], cwd=root, capture_output=True, text=True, timeout=60)
+    result = subprocess.run([str(installed), "build", "--allow-unsupported-game"], cwd=root, capture_output=True, text=True, timeout=60)
     print(result.stdout, end="")
     if result.returncode or "2 patched scripts" not in result.stdout:
         raise SystemExit(result.stderr or f"Unexpected result: {result.returncode}")

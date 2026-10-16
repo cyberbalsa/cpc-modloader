@@ -25,6 +25,8 @@ In Steam, open the game’s **Properties → Installed Files → Browse** to fin
 
 Put mods in `Mods/MyMod/cpcmodloader.toml` inside the game folder, then click **Play** in Steam. The top-left menu label shows the loader version and mod count.
 
+Untested game updates stop before patching. New loader releases show a notice in the menu. [Update help](docs/reference.md#game-updates).
+
 Modded saves: `cpc-modloader-data/default/game/saves`. Original saves stay untouched. Clear Launch Options to play without the loader.
 
 [Writing mods](docs/modding.md) · [Troubleshooting](docs/reference.md)

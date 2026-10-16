@@ -26,6 +26,9 @@ do
                 if valid(overlay) then destroyEntity(overlay) end
             end)
             _G.cpcmodloader.log(_G.cpcmodloader.status)
+            for _, notice in ipairs(_G.cpcmodloader.notices) do
+                _G.cpcmodloader.log(notice)
+            end
         end)
     end
 end

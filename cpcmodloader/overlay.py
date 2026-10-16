@@ -23,6 +23,21 @@ GLYPHS = {
     "r": [0, 0, 22, 25, 16, 16, 16],
     "s": [0, 0, 15, 16, 14, 1, 30],
     "v": [0, 0, 17, 17, 17, 10, 4],
+    "b": [16, 16, 30, 17, 17, 17, 30],
+    "f": [6, 8, 8, 30, 8, 8, 8],
+    "g": [0, 0, 15, 17, 15, 1, 14],
+    "h": [16, 16, 30, 17, 17, 17, 17],
+    "i": [4, 0, 12, 4, 4, 4, 14],
+    "j": [2, 0, 6, 2, 2, 18, 12],
+    "k": [16, 16, 18, 20, 24, 20, 18],
+    "n": [0, 0, 30, 17, 17, 17, 17],
+    "q": [0, 0, 15, 17, 15, 1, 1],
+    "t": [8, 8, 30, 8, 8, 8, 6],
+    "u": [0, 0, 17, 17, 17, 19, 13],
+    "w": [0, 0, 17, 17, 21, 21, 10],
+    "x": [0, 0, 17, 10, 4, 10, 17],
+    "y": [0, 0, 17, 17, 15, 1, 14],
+    "z": [0, 0, 31, 2, 4, 8, 31],
     "0": [14, 17, 19, 21, 25, 17, 14],
     "1": [4, 12, 4, 4, 4, 4, 14],
     "2": [14, 17, 1, 2, 4, 8, 31],
@@ -89,35 +104,38 @@ void main() {
 """
 
 
-def assets(version: str, mod_count: int) -> dict[str, bytes]:
-    text = label(version, mod_count)
+def assets(version: str, mod_count: int, notices: list[str] | None = None) -> dict[str, bytes]:
+    lines = [label(version, mod_count), *(notices or [])]
+    width = max(map(len, lines)) * 6
     # One integer per pixel column; low bit is the top row.
     columns = []
-    for character in text:
-        rows = GLYPHS[character]
-        columns.extend(sum(((row >> (4 - x)) & 1) << y for y, row in enumerate(rows)) for x in range(5))
-        columns.append(0)
+    for text in lines:
+        for character in text.ljust(width // 6):
+            rows = GLYPHS[character]
+            columns.extend(sum(((row >> (4 - x)) & 1) << y for y, row in enumerate(rows)) for x in range(5))
+            columns.append(0)
     fragment = """precision highp float;
 in vec2 cpcUV;
 layout(location = 0) out vec4 colorOut;
 uniform float cpcScale;
 const int width = WIDTH;
-const int pixels[WIDTH] = int[](PIXELS);
+const int lines = LINES;
+const int pixels[SIZE] = int[](PIXELS);
 bool ink(ivec2 p) {
-    if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= 7) return false;
-    return (pixels[p.x] & (1 << p.y)) != 0;
+    if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= lines * 10 || p.y % 10 >= 7) return false;
+    return (pixels[(p.y / 10) * width + p.x] & (1 << (p.y % 10))) != 0;
 }
 void main() {
     // UV derivatives give the current viewport, including fullscreen and resizing.
     vec2 viewport = 1.0 / vec2(abs(dFdx(cpcUV.x)), abs(dFdy(cpcUV.y)));
     float scale = max(1.0, min(floor(cpcScale), floor((viewport.x - 16.0) / float(width))));
     ivec2 p = ivec2(floor((vec2(gl_FragCoord.x, viewport.y - gl_FragCoord.y) - 8.0) / scale));
-    if (ink(p)) colorOut = vec4(1.0);
+    if (ink(p)) colorOut = p.y < 10 ? vec4(1.0) : vec4(1.0, 0.8, 0.25, 1.0);
     else if (ink(p + ivec2(1, 0)) || ink(p - ivec2(1, 0)) ||
              ink(p + ivec2(0, 1)) || ink(p - ivec2(0, 1))) colorOut = vec4(0.0, 0.0, 0.0, 1.0);
     else discard;
 }
-""".replace("WIDTH", str(len(columns))).replace("PIXELS", ",".join(map(str, columns)))
+""".replace("WIDTH", str(width)).replace("LINES", str(len(lines))).replace("SIZE", str(len(columns))).replace("PIXELS", ",".join(map(str, columns)))
     return {
         "assets/models/cpcmodloader_overlay.glb": quad(),
         "assets/shaders/cpcmodloader_overlay.vert": VERTEX.encode(),

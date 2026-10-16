@@ -106,7 +106,7 @@ class LauncherTests(unittest.TestCase):
         wrapper = str(self.root / "wrapper")
         with patch("cpcmodloader.cli.launcher_directory", return_value=self.game), \
              patch("cpcmodloader.cli.run_game", return_value=7) as launch:
-            code = main(["steam", "--", wrapper, "--", str(game_exe), "--name", "two words"])
+            code = main(["steam", "--allow-unsupported-game", "--no-update-check", "--", wrapper, "--", str(game_exe), "--name", "two words"])
         self.assertEqual(code, 7)
         profile = self.game / DATA_DIRECTORY / "default"
         self.assertEqual(launch.call_args.args[0], profile / "game")
@@ -191,7 +191,7 @@ class LauncherTests(unittest.TestCase):
             self.assertNotIn("LD_LIBRARY_PATH", external_environment())
 
     def test_check_does_not_create_profile(self):
-        code = main(["check", "--game-dir", str(self.game), "--mods-dir", str(self.mods)])
+        code = main(["check", "--allow-unsupported-game", "--game-dir", str(self.game), "--mods-dir", str(self.mods)])
         self.assertEqual(code, 0)
         self.assertFalse(self.profile.exists())
 

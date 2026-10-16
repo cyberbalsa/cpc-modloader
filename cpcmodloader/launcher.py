@@ -15,6 +15,7 @@ import tempfile
 import time
 
 from .patcher import PatchError, Plan, inside
+from .compatibility import detect_game
 
 APP_ID = "3031880"
 OWNER = "cpcmodloader-profile.json"
@@ -67,6 +68,30 @@ def external_environment() -> dict[str, str]:
             else:
                 env["LD_LIBRARY_PATH"] = original
     return env
+
+
+def show_launch_error(message: str, log: Path):
+    """Steam can hide stdout: leave a readable error and show a desktop dialog."""
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(message + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    try:
+        if os.name == "nt":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, "cpc-modloader", 0x10)
+        elif os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            if dialog := shutil.which("zenity"):
+                command = [dialog, "--error", "--no-markup", "--title=cpc-modloader", "--text=" + message]
+            elif dialog := shutil.which("kdialog"):
+                command = [dialog, "--title", "cpc-modloader", "--error", message]
+            else:
+                return
+            # Wait so a onefile bundle remains available until the dialog exits.
+            subprocess.run(command, env=external_environment(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def validate_game(game: Path) -> Path:
@@ -249,6 +274,12 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
                 if (current / name).is_symlink():
                     raise PatchError(f"symlink in profile: {current / name}")
                 copy_file(current / name, stage / name)
+        if plan.game:
+            copied = detect_game(stage, stage / executable(game).name)
+            if (copied.executable_sha256 != plan.game.executable_sha256 or
+                    copied.scripts_sha256 != plan.game.scripts_sha256 or
+                    detect_game(game, executable(game)) != plan.game):
+                raise PatchError("game changed during build; retry after the Steam update finishes")
         for target, source in plan.sources.items():
             if hashlib.sha256((stage / target).read_bytes()).hexdigest() != plan.original_hashes[target]:
                 raise PatchError(f"source changed during build; retry after the game update finishes: {target}")

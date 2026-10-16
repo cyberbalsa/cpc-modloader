@@ -8,9 +8,11 @@ import subprocess
 import sys
 
 from . import __version__
+from .compatibility import detect_game
 from .launcher import (build, default_profile, executable, find_game, launcher_directory,
-                       profile_lock, run_game, steam_command, syntax_check, validate_game)
+                       profile_lock, run_game, steam_command, syntax_check, validate_game, show_launch_error)
 from .patcher import PatchError, compile_plan, discover
+from .updates import check_for_updates, RELEASES_URL, UpdateStatus
 
 
 def parser():
@@ -28,7 +30,9 @@ def parser():
             command.add_argument("--profile-dir", type=Path, help="private game + saves (in-game install: cpc-modloader-data/default)")
         if name in {"check", "build", "run", "steam"}:
             command.add_argument("--luac", help="optional path to Lua 5.4's luac compiler")
+            command.add_argument("--allow-unsupported-game", action="store_true", help="test an unverified game build (mod requirements still apply)")
         if name in {"run", "steam"}:
+            command.add_argument("--no-update-check", action="store_true", help="disable the GitHub release check")
             command.add_argument("--timeout", type=float, help="stop the game after N seconds (smoke tests; exit 124)")
             command.add_argument("game_args", nargs=argparse.REMAINDER, help="game arguments, or Steam's original command, after --")
     return result
@@ -56,11 +60,33 @@ def main(argv=None) -> int:
         if game is None:
             raise PatchError("game not found; pass --game-dir '/path/to/Car Park Capital'")
         game = validate_game(game)
+        game_info = detect_game(game, executable(game))
         if args.command == "inspect":
             print(json.dumps({"game": str(game), "lua_scripts": len(list((game / "assets/scripts").rglob("*.lua"))),
-                              "executable": str(executable(game)), "loader": __version__, "lua": "5.4"}, indent=2))
+                              "executable": str(executable(game)), "loader": __version__, "lua": "5.4",
+                              "game_version": game_info.report()}, indent=2))
             return 0
-        plan = compile_plan(game, mods)
+        print(game_info.description, flush=True)
+        update = UpdateStatus("not_checked")
+        if args.command in {"run", "steam"}:
+            update = check_for_updates(base / "cpc-modloader-data/update-check.json", enabled=not args.no_update_check)
+            if update.notice:
+                print(f"{update.notice}\n{RELEASES_URL}", flush=True)
+            elif update.state == "unavailable":
+                print("Update check unavailable; continuing offline.", flush=True)
+        if not game_info.supported and not args.allow_unsupported_game:
+            raise PatchError(f"{game_info.description} has not been verified with this loader, or its files have changed.\n"
+                             f"Get the latest loader: {RELEASES_URL}\n"
+                             "To test this game build, add --allow-unsupported-game before -- in Launch Options.\n"
+                             "Clear Launch Options to play without mods.")
+        notices = []
+        if not game_info.supported:
+            notices.append("unverified game build - mods may break")
+        if update.notice:
+            notices.append(update.notice)
+        for notice in notices:
+            print(f"Notice: {notice}", flush=True)
+        plan = compile_plan(game, mods, game_info=game_info, notices=notices, update=update.report())
         syntax = syntax_check(plan, args.luac)
         print(f"cpc-modloader {__version__}: {len(plan.mods)} mods, {len(plan.manifests)} manifests, {len(plan.events)} patch applications, {len(plan.sources)} patched scripts", flush=True)
         print(f"Syntax: {syntax}", flush=True)
@@ -73,6 +99,13 @@ def main(argv=None) -> int:
             raise PatchError("--timeout must be positive")
         executable(game)
         with profile_lock(profile, game, mods):
+            previous_report = profile / "game/cpcmodloader-report.json"
+            try:
+                previous_game = json.loads(previous_report.read_text(encoding="utf-8")).get("game")
+            except (OSError, ValueError, AttributeError):
+                previous_game = None
+            if previous_game and previous_game != game_info.report():
+                print("Game update detected since the previous build; rebuilding all patches.", flush=True)
             directory = build(game, profile, plan, syntax)
             print(f"Built: {directory}\nReport: {directory / 'cpcmodloader-report.json'}", flush=True)
             if args.command == "build":
@@ -89,6 +122,8 @@ def main(argv=None) -> int:
             return code if code >= 0 else 128 - code
     except (PatchError, OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"cpcmodloader: {exc}", file=sys.stderr)
+        if args.command in {"run", "steam"}:
+            show_launch_error(str(exc), launcher_directory() / "cpc-modloader-data/launch-error.txt")
         return 1
     except KeyboardInterrupt:
         print("cpcmodloader: stopped", file=sys.stderr)

@@ -11,6 +11,7 @@ import re
 import tomllib
 
 from . import __version__, overlay
+from .compatibility import GameVersion, requirements, satisfies
 
 
 class PatchError(Exception):
@@ -112,6 +113,7 @@ class Manifest:
     priority: int
     patches: list
     variables: dict
+    compatibility: dict = field(default_factory=dict)
 
     @property
     def label(self):
@@ -126,12 +128,18 @@ class Plan:
     manifests: list[str] = field(default_factory=list)
     mods: list[str] = field(default_factory=list)
     assets: dict[str, bytes] = field(default_factory=dict)
+    game: GameVersion | None = None
+    notices: list[str] = field(default_factory=list)
+    update: dict = field(default_factory=dict)
 
     def report(self):
         return {
             "format": 1,
             "manifests": self.manifests,
             "loader_version": __version__,
+            "game": self.game.report() if self.game else None,
+            "notices": self.notices,
+            "update": self.update,
             "mods": self.mods,
             "mod_count": len(self.mods),
             "generated_assets": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(self.assets.items())},
@@ -163,13 +171,22 @@ def discover(mods: Path) -> list[Manifest]:
             inside(root, path.relative_to(root).as_posix())
             try:
                 data = tomllib.loads(read_text(path))
-                only_keys(data, {"manifest", "vars", "patches"}, "top-level")
+                only_keys(data, {"manifest", "vars", "patches", "compatibility"}, "top-level")
                 meta = data.get("manifest", {})
                 only_keys(meta, {"version", "priority", "enabled", "dump_lua"}, "manifest")
                 if string(meta, "version") != "1.0.0":
                     raise PatchError("manifest.version must be '1.0.0'")
                 if not boolean(meta, "enabled", True):
                     continue
+                compatibility = data.get("compatibility", {})
+                only_keys(compatibility, {"game", "loader", "steam_builds"}, "compatibility")
+                for key in ("game", "loader"):
+                    if key in compatibility:
+                        requirements(compatibility[key])
+                if "steam_builds" in compatibility:
+                    builds = compatibility["steam_builds"]
+                    if not isinstance(builds, list) or not builds or not all(isinstance(b, str) and b.isascii() and b.isdigit() for b in builds):
+                        raise PatchError("compatibility.steam_builds must be a nonempty array of numeric strings")
                 boolean(meta, "dump_lua", False)  # Already available in the generated profile.
                 priority = integer(meta, "priority", 0)
                 variables = data.get("vars", {})
@@ -178,8 +195,8 @@ def discover(mods: Path) -> list[Manifest]:
                 patches = data.get("patches", [])
                 if not isinstance(patches, list):
                     raise PatchError("patches must be an array of tables")
-                result.append(Manifest(path, root, priority, patches, variables))
-            except (PatchError, tomllib.TOMLDecodeError) as exc:
+                result.append(Manifest(path, root, priority, patches, variables, compatibility))
+            except (PatchError, ValueError) as exc:
                 raise PatchError(f"{path}: {exc}") from exc
     return sorted(result, key=lambda m: (m.priority, m.label))
 
@@ -307,9 +324,18 @@ FIELDS = {
 }
 
 
-def compile_plan(game: Path, mods: Path) -> Plan:
+def compile_plan(game: Path, mods: Path, *, game_info: GameVersion | None = None,
+                 notices: list[str] | None = None, update: dict | None = None) -> Plan:
     manifests = discover(mods)
-    plan = Plan(manifests=[m.label for m in manifests], mods=sorted({m.root.name for m in manifests}))
+    for manifest in manifests:
+        compat = manifest.compatibility
+        for key, actual in (("game", game_info.version if game_info else None), ("loader", __version__)):
+            if key in compat and not satisfies(actual, compat[key]):
+                raise PatchError(f"{manifest.label}: requires {key} {compat[key]}; detected {actual or 'unknown'}. Update or disable this mod.")
+        if "steam_builds" in compat and (not game_info or game_info.steam_build_id not in compat["steam_builds"]):
+            raise PatchError(f"{manifest.label}: requires Steam build {', '.join(compat['steam_builds'])}; detected {game_info.steam_build_id if game_info else 'unknown'}. Update or disable this mod.")
+    plan = Plan(manifests=[m.label for m in manifests], mods=sorted({m.root.name for m in manifests}),
+                game=game_info, notices=list(notices or []), update=update or {})
     files = sorted(p.relative_to(game).as_posix() for p in (game / "assets/scripts").rglob("*.lua"))
     work = []
     module_names = set()
@@ -395,7 +421,7 @@ def compile_plan(game: Path, mods: Path) -> Plan:
             plan.sources[target] = read_text(path)
         body = resource_files("cpcmodloader").joinpath("overlay.lua").read_text(encoding="utf-8")
         plan.sources[target] = join_code(plan.sources[target], body, newline(plan.sources[target]))
-        plan.assets = overlay.assets(__version__, len(plan.mods))
+        plan.assets = overlay.assets(__version__, len(plan.mods), plan.notices)
         for asset in plan.assets:
             if inside(game, asset).exists():
                 raise PatchError(f"reserved loader asset already exists in game: {asset}")
@@ -404,6 +430,10 @@ def compile_plan(game: Path, mods: Path) -> Plan:
     runtime = runtime.replace('"__CPC_VERSION__"', json.dumps(__version__))
     runtime += (f"\n_G.cpcmodloader.mod_count = {len(plan.mods)}\n"
                 f"_G.cpcmodloader.status = {json.dumps(overlay.label(__version__, len(plan.mods)))}\n")
+    runtime += (f"_G.cpcmodloader.game_version = {json.dumps(game_info.version) if game_info and game_info.version else 'nil'}\n"
+                f"_G.cpcmodloader.game_build = {json.dumps(game_info.steam_build_id) if game_info and game_info.steam_build_id else 'nil'}\n"
+                f"_G.cpcmodloader.notices = {{{', '.join(json.dumps(n) for n in plan.notices)}}}\n"
+                f"_G.cpcmodloader.update_url = {json.dumps(plan.update.get('url', ''))}\n")
     for target, source in plan.sources.items():
         prefix = runtime + "\n" + "".join(module_prefixes.get(target, []))
         plan.sources[target] = join_code(with_newlines(prefix, newline(source)), source, newline(source))

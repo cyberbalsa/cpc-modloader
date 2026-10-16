@@ -81,4 +81,19 @@ load_now = false
 
 The file is wrapped as a Lua factory and registered before the target's code. Call `_G.cpcmodloader.require("my_mod.helpers")` for a cached result. Inside a module factory, local `require` uses the same loader. If the game exposes Lua's package library, the module is also registered in `package.preload`; if no native `require` exists, the runtime supplies one. `load_now = true` executes the module immediately after registration. Choose a `before` target that actually executes before its consumers, and register dependencies before eager consumers. Module names must be unique across all enabled manifests.
 
-The runtime exposes `_G.cpcmodloader.version`, `.mod_count`, `.status` (the menu label), `.log(message)`, `.preload(name, factory)`, and `.require(name)`. Module errors propagate to the game, circular dependencies report an error, and modules are cached per Lua state. Factories inherit their registration chunk's environment. This first version does not expose runtime repatching, native modules, or patch targets inside injected module factories.
+The runtime exposes `_G.cpcmodloader.version`, `.mod_count`, `.status` (the menu label), `.game_version`, `.game_build`, `.notices`, `.update_url`, `.log(message)`, `.preload(name, factory)`, and `.require(name)`. Unknown game versions/builds are `nil`. Module errors propagate to the game, circular dependencies report an error, and modules are cached per Lua state. Factories inherit their registration chunk's environment. This first version does not expose runtime repatching, native modules, or patch targets inside injected module factories.
+
+### Version requirements
+
+Add an optional top-level table to each manifest:
+
+```toml
+[compatibility]
+game = ">=1.0.1, <1.1.0"
+loader = ">=0.1.2"
+steam_builds = ["25985572"] # Optional exact Steam build IDs
+```
+
+Versions use three numbers. A bare version or `=` / `==` means exact equality; `>`, `>=`, `<`, and `<=` are also supported. Comma-separated requirements must all match. Wildcards, prereleases, `^`, `~`, and OR expressions are not supported. `manifest.version` remains the manifest format version, `1.0.0`.
+
+Each field is optional. An omitted table adds no mod-specific restriction. A mismatch or an unknown required version stops the entire build before patches run; update or disable the named mod. `--allow-unsupported-game` only bypasses the loader's tested-game check, never a mod's declared requirements. Disabled mods are ignored.
