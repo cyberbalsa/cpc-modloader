@@ -19,6 +19,6 @@ python dist/cpcmodloader.pyz --version
 
 Install Lua 5.4 to run the Lua integration tests; without it, some tests skip. Add a regression test for a behavior change or explain why an existing test covers it. Docs-only edits need a content/link check. List the OS you tested and any platform you could not test. CI tests and packages Windows and Linux without game files; it does not replace an in-game test for launcher or overlay changes.
 
-Do not commit generated builds, logs, caches, credentials, or files larger than 1 MiB. Use small synthetic fixtures for tests. Keep runtime dependencies optional unless a feature needs one. Preserve original game files and modded saves.
+Do not commit generated builds, logs, caches, credentials, or files larger than 1 MiB. Use small synthetic fixtures for tests. Keep runtime dependencies optional unless a feature needs one. Preserve original game assets and executables. Saves must use the installed game's `saves` directory.
 
 All PRs need passing checks and resolved review threads. Outside contributions also need the code owner's approval. New commits dismiss old approvals. The PR-description check requires filled `Problem`, `Changes`, and `Validation` sections and both acknowledgements; Dependabot's generated descriptions are accepted. Maintainers may request a smaller reproduction or split PR before reviewing.

@@ -16,6 +16,7 @@ import time
 
 from .patcher import PatchError, Plan, inside
 from .compatibility import detect_game
+from .saves import is_link, prepare_saves
 
 APP_ID = "3031880"
 OWNER = "cpcmodloader-profile.json"
@@ -208,8 +209,8 @@ def profile_lock(profile: Path, game: Path, mods: Path):
             # Recover a build interrupted between the two directory renames.
             previous = profile / ".previous"
             current = profile / "game"
-            if previous.is_symlink() or current.is_symlink():
-                raise PatchError("profile game/backup directories must not be symlinks")
+            if is_link(previous) or is_link(current):
+                raise PatchError("profile game/backup directories must not be links")
             if previous.exists() and not current.exists():
                 previous.rename(current)
             yield
@@ -264,11 +265,7 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
                 if path.is_symlink():
                     raise PatchError(f"symlink in game root: {path}")
                 copy_file(path, stage / path.name)
-        # Keep modded saves/settings in the profile, never share them with Steam's tree.
-        if (current / "saves").exists():
-            copy_tree(current / "saves", stage / "saves")
-        else:
-            (stage / "saves").mkdir()
+        # Settings stay per-profile; saves use the installed game's directory.
         for name in ("settings.json", "imgui.ini"):
             if (current / name).is_file():
                 if (current / name).is_symlink():
@@ -290,7 +287,9 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
                 raise PatchError(f"generated asset would overwrite a game file: {target}")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        report = plan.report() | {"syntax_check": syntax, "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        saves = prepare_saves(game, profile, stage)
+        report = plan.report() | {"saves": saves, "syntax_check": syntax,
+                                "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (stage / "cpcmodloader-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         if previous.exists():
             shutil.rmtree(previous)

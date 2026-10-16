@@ -15,6 +15,9 @@ with tempfile.TemporaryDirectory(prefix="cpc bundle test ") as temporary:
     (scripts / "main.lua").write_text("return 1\n", encoding="utf-8")
     (scripts / "entities/3d").mkdir(parents=True)
     (scripts / "entities/3d/MainMenu.lua").write_text("function create(menu) end\n", encoding="utf-8")
+    saves = root / "game/saves"
+    saves.mkdir()
+    (saves / "progress.json").write_text('{"test": true}', encoding="utf-8")
     installed = root / "game" / program.name
     shutil.copy2(program, installed)
     (root / "game" / ("carparkcapital.exe" if sys.platform == "win32" else "carparkcapital")).write_bytes(b"test game")
@@ -39,3 +42,8 @@ payload = "print('bundled mod')"
     assert not (profile / program.name).exists()
     assert not (profile / "cpc-modloader-data").exists()
     assert (scripts / "main.lua").read_text() == "return 1\n"
+    assert (profile / "saves").samefile(saves)
+    assert (profile / "saves/progress.json").read_text() == '{"test": true}'
+    (profile / "saves/test.cpcp").write_bytes(b"shared save")
+    shutil.rmtree(profile.parent)
+    assert (saves / "test.cpcp").read_bytes() == b"shared save"
