@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix="cpcmodloader-package-") as temporary:
     zipapp.create_archive(stage, DIST / "cpcmodloader.pyz", interpreter="/usr/bin/env python3", compressed=True)
 
 with zipfile.ZipFile(DIST / "cpcmodloader-source.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:
-    for entry in ("cpcmodloader", "scripts", "tests", "examples", "docs", ".github", "README.md", "LICENSE", "pyproject.toml", ".gitignore"):
+    for entry in ("cpcmodloader", "scripts", "tests", "examples", "docs", ".github", "README.md", "CONTRIBUTING.md", "SECURITY.md", "requirements-dev.txt", "LICENSE", "pyproject.toml", ".gitignore"):
         path = ROOT / entry
         for source in sorted(path.rglob("*") if path.is_dir() else [path]):
             if source.is_file() and "__pycache__" not in source.parts:

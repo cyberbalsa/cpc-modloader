@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from cpcmodloader import __version__, overlay
 from cpcmodloader.cli import main
-from cpcmodloader.compatibility import GameVersion, detect_game, satisfies, version_tuple
+from cpcmodloader.compatibility import detect_game, satisfies, version_tuple
 from cpcmodloader.launcher import build, executable, profile_lock
 from cpcmodloader.patcher import PatchError, compile_plan
 from cpcmodloader.updates import check_for_updates, fetch_latest, https_context, MAX_RESPONSE

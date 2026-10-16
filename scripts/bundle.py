@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix="cpc-release-") as temporary:
     shutil.copy2(ROOT / "dist" / binary, stage / binary)
     documentation = stage / "cpc-modloader-docs"
     documentation.mkdir()
-    for name in ("README.md", "LICENSE"):
+    for name in ("README.md", "LICENSE", "CONTRIBUTING.md", "SECURITY.md"):
         shutil.copy2(ROOT / name, documentation / name)
     for name in ("docs", "examples"):
         shutil.copytree(ROOT / name, documentation / name)

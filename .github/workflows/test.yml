@@ -1,19 +1,47 @@
 name: Test and package
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check .
+      - run: python scripts/check_repository.py
+      - run: git show --format= --check HEAD
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         python: ['3.11', '3.13']
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      - name: Install Lua for integration tests
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
       - run: python -m unittest discover -s tests -v
       - run: python scripts/package.py
       - run: python dist/cpcmodloader.pyz --version
@@ -21,6 +49,7 @@ jobs:
       - run: cpc-modloader --version
   bundle:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
@@ -30,16 +59,34 @@ jobs:
             platform: windows
             binary: cpc-modloader.exe
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - run: python -m pip install . pyinstaller==6.11.1
       - run: python -m PyInstaller --clean --onefile --name cpc-modloader --collect-data cpcmodloader scripts/entrypoint.py
       - run: python scripts/check_bundle.py dist/${{ matrix.binary }}
       - run: python scripts/bundle.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cpc-modloader-${{ matrix.platform }}-x86_64
           path: dist/cpc-modloader-${{ matrix.platform }}-x86_64.zip
+          retention-days: 14
+          if-no-files-found: error
+  ci:
+    name: CI
+    if: always()
+    needs: [quality, test, bundle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to succeed
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          TEST: ${{ needs.test.result }}
+          BUNDLE: ${{ needs.bundle.result }}
+        run: test "$QUALITY" = success && test "$TEST" = success && test "$BUNDLE" = success
