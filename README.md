@@ -1,15 +1,24 @@
 # cpc-modloader
 
-A [Lovely-style](https://github.com/ethangreen-dev/lovely-injector) Lua mod loader for **Car Park Capital** on Windows and Linux.
+A [Lovely-style](https://github.com/ethangreen-dev/lovely-injector) Lua mod loader for **Car Park Capital**. Install the game through Steam first.
 
-1. Install Car Park Capital through Steam.
-2. [Download](https://github.com/cyberbalsa/cpc-modloader/releases/latest) the loader for your OS and extract it outside the game folder. No Python installation needed.
-3. Put each extracted mod folder in `Mods` beside the loader: `Mods/MyMod/cpcmodloader.toml`.
-4. In Steam, choose **Games → Add a Non-Steam Game → Browse** and select `cpc-modloader.exe` (Windows) or `cpc-modloader` (Linux).
-5. Open that shortcut’s **Properties**. Set **Start In** to the extracted folder and **Launch Options** to `run`. Click **Play** on this shortcut to launch with mods.
+## Linux
 
-If the game isn’t found, use `run --game-dir "path/to/Car Park Capital"` instead. On Linux, allow the loader to run as a program if needed.
+1. [Download the Linux ZIP](https://github.com/cyberbalsa/cpc-modloader/releases/latest/download/cpc-modloader-linux-x86_64.zip) and extract it outside the game folder.
+2. Allow `cpc-modloader` to run as a program: open a terminal in its folder and run `chmod +x cpc-modloader`.
+3. In Steam, choose **Games → Add a Non-Steam Game → Browse** and select `cpc-modloader`.
+4. Open the shortcut’s **Properties**. Set **Start In** to the extracted folder and **Launch Options** to `run`. Launch this shortcut from Steam.
 
-Modded saves live in `run/default/game/saves`; your original game and saves stay untouched. Remove a mod folder to disable it on the next launch.
+## Windows
 
-[Writing mods](docs/modding.md) · [Troubleshooting and commands](docs/reference.md)
+1. [Download the Windows ZIP](https://github.com/cyberbalsa/cpc-modloader/releases/latest/download/cpc-modloader-windows-x86_64.zip) and extract it outside the game folder.
+2. In Steam, choose **Games → Add a Non-Steam Game → Browse** and select `cpc-modloader.exe`.
+3. Open the shortcut’s **Properties**. Set **Start In** to the extracted folder and **Launch Options** to `run`. Launch this shortcut from Steam.
+
+Put extracted mods beside the loader: `Mods/MyMod/cpcmodloader.toml`. The main menu’s top-left label shows the loader version and mod count.
+
+If the game isn’t found, use `run --game-dir "path/to/Car Park Capital"` instead.
+
+Modded saves live in `run/default/game/saves`. Original saves stay untouched.
+
+[Writing mods](docs/modding.md) · [Troubleshooting](docs/reference.md)
