@@ -1,6 +1,5 @@
 # Commands and profiles
 
-
 | Command | Purpose |
 | --- | --- |
 | `inspect` | Show the detected executable and Lua script count |
@@ -33,4 +32,3 @@ The first build copies the installed game's settings and starts with an **empty 
 Assets and the executable are independent copies. Linux uses copy-on-write cloning when supported; otherwise the launcher copies files, as it does on Windows. Allow about the size of the installation per profile, plus temporary build space. Builds are staged before publication, failures keep the previous build, and an OS lock prevents concurrent builds/launches in the same profile. Do not launch the generated executable directly while rebuilding that profile.
 
 Removing a mod, adding a `.disabled` file in its folder, or setting a manifest's `enabled = false` takes effect on the next `run` or `build`. To remove the loader, remove this project and any profiles you no longer need; profiles contain your modded saves.
-
