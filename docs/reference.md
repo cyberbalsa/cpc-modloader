@@ -27,26 +27,28 @@ cpc-modloader-data/default/
     carparkcapital[.exe]
     assets/scripts/...           # patched sources available for inspection
     cpcmodloader-report.json     # manifests, matches, file hashes, syntax result
-    saves/                       # persistent modded saves
+    saves/                       # link to the installed game's saves
     settings.json                # persistent modded settings
     imgui.ini
 ```
 
-The first build copies the installed game's settings and starts with an **empty modded saves directory**. Subsequent builds preserve the profile's `saves/`, `settings.json`, and `imgui.ini`. To use an existing save, copy it into the profile's `game/saves/` while the game is closed. Clear Steam's Launch Options to play with your original saves.
+Saves, scenario progress, and blueprints use the installed game's normal `saves/` directory, including when launched through Steam. The profile points there with a Linux symlink or Windows directory junction; Windows does not need Developer Mode. Writes go straight to that folder so Steam Cloud can sync them. Clearing Launch Options keeps the same saves.
 
-When moving from an external v0.1.0 installation, copy its `run/default/game/saves` into the new profile after the first build, with the game closed. Keep the old profile until you have checked your saves.
+On the first build after upgrading from v0.1.2 or earlier, the loader backs up nonempty profile saves to `saves-backup-*/saves` inside the profile, then imports files missing from the normal save folder. Existing files win any conflict; the old profile's versions remain in the backup. The build output and report list the backup path and conflicts. Close the game before upgrading. For a different, older profile, copy any saves you want from it into the game's normal `saves/` folder while the game is closed.
+
+Settings remain per-profile. The first build copies the installed game's settings; later builds preserve `settings.json` and `imgui.ini`.
 
 Assets and the executable are independent copies. Linux uses copy-on-write cloning when supported; otherwise the launcher copies files, as it does on Windows. Allow about the size of the installation per profile, plus temporary build space. Builds are staged before publication, failures keep the previous build, and an OS lock prevents concurrent builds/launches in the same profile. Do not launch the generated executable directly while rebuilding that profile.
 
-Removing a mod, adding a `.disabled` file in its folder, or setting a manifest's `enabled = false` takes effect on the next launch or build. To uninstall, clear Steam's Launch Options and remove `cpc-modloader` / `cpc-modloader.exe` and `cpc-modloader-docs`. Keep or back up `Mods` and `cpc-modloader-data` if you want to retain your mods and modded saves.
+Removing a mod, adding a `.disabled` file in its folder, or setting a manifest's `enabled = false` takes effect on the next launch or build. To uninstall, clear Steam's Launch Options and remove `cpc-modloader` / `cpc-modloader.exe` and `cpc-modloader-docs`. Keep `Mods` and any `saves-backup-*` folders you want to retain. Your current saves stay in the game's `saves/` folder.
 
 ## Game updates
 
-v0.1.2 recognizes **Early Access 1.0.1, Steam build 25985572**, on Linux and Windows. The loader reads the version from the executable and the build ID from Steam's app manifest, then checks executable and Lua source hashes against tested copies. Without a Steam manifest, matching version and file hashes are sufficient. A changed executable or script is treated as unverified even if the version number stayed the same.
+v0.1.3 recognizes **Early Access 1.0.1, Steam build 25985572**, on Linux and Windows. The loader reads the version from the executable and the build ID from Steam's app manifest, then checks executable and Lua source hashes against tested copies. Without a Steam manifest, matching version and file hashes are sufficient. A changed executable or script is treated as unverified even if the version number stayed the same.
 
 An unverified game stops before building or launching. The previous profile and saves stay in place. Steam launch failures show a desktop dialog when Windows, Zenity, or KDialog is available; the message is also saved to `cpc-modloader-data/launch-error.txt` beside the loader.
 
-Install the latest loader first. To test an unverified game, back up modded saves and add the override before `--`:
+Install the latest loader first. To test an unverified game, back up the game's saves and add the override before `--`:
 
 ```text
 # Linux

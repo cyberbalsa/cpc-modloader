@@ -30,7 +30,7 @@ class LauncherTests(unittest.TestCase):
         self.mods = self.root / "Mods"
         self.profile = self.root / "profile"
 
-    def test_build_isolation_and_persistent_profile_state(self):
+    def test_build_shares_saves_and_preserves_profile_settings(self):
         import hashlib
         target = "assets/scripts/main.lua"
         plan = Plan(sources={target: "return 42\n"}, original_hashes={target: hashlib.sha256((self.game / target).read_bytes()).hexdigest()})
@@ -38,7 +38,8 @@ class LauncherTests(unittest.TestCase):
             directory = build(self.game, self.profile, plan, "test")
             self.assertEqual((directory / target).read_text(), "return 42\n")
             self.assertEqual((self.game / target).read_text(), "return 1\n")
-            self.assertFalse((directory / "saves/vanilla.sav").exists())
+            self.assertTrue((directory / "saves").samefile(self.game / "saves"))
+            self.assertEqual((directory / "saves/vanilla.sav").read_bytes(), b"keep vanilla")
             (directory / "saves/modded.sav").write_bytes(b"modded save")
             (directory / "settings.json").write_text('{"modded": true}')
             (directory / "assets/texture.dat").write_bytes(b"changed asset")
@@ -49,6 +50,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual((directory / "assets/texture.dat").read_bytes(), b"original asset")
         self.assertEqual((self.game / "settings.json").read_text(), '{"original": true}')
         self.assertEqual((self.game / "saves/vanilla.sav").read_bytes(), b"keep vanilla")
+        self.assertEqual((self.game / "saves/modded.sav").read_bytes(), b"modded save")
 
     def test_refuse_nonempty_and_overlapping_profiles(self):
         self.profile.mkdir()

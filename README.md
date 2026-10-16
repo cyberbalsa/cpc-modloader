@@ -27,6 +27,6 @@ Put mods in `Mods/MyMod/cpcmodloader.toml` inside the game folder, then click **
 
 Untested game updates stop before patching. New loader releases show a notice in the menu. [Update help](docs/reference.md#game-updates).
 
-Modded saves: `cpc-modloader-data/default/game/saves`. Original saves stay untouched. Clear Launch Options to play without the loader.
+Uses the game's normal `saves` folder for Steam Cloud. Clear Launch Options to play without the loader.
 
 [Writing mods](docs/modding.md) · [Troubleshooting](docs/reference.md) · [Contributing](CONTRIBUTING.md)

@@ -16,7 +16,7 @@ from .updates import check_for_updates, RELEASES_URL, UpdateStatus
 
 
 def parser():
-    result = argparse.ArgumentParser(prog="cpc-modloader", description="Lovely-style Lua patcher for Car Park Capital. Original game files remain untouched.")
+    result = argparse.ArgumentParser(prog="cpc-modloader", description="Lovely-style Lua patcher for Car Park Capital. Uses the game's normal saves.")
     result.add_argument("--version", action="version", version=f"cpc-modloader {__version__}")
     commands = result.add_subparsers(dest="command", required=True)
     for name, description in (("inspect", "Inspect a game installation"), ("mods", "List enabled patch manifests"),
@@ -27,7 +27,7 @@ def parser():
         command.add_argument("--game-dir", type=Path, default=os.environ.get("CPC_GAME_DIR"), help="Steam game directory (auto-detected when omitted)")
         command.add_argument("--mods-dir", type=Path, help="mod folders (default: Mods beside the loader)")
         if name in {"build", "run", "steam"}:
-            command.add_argument("--profile-dir", type=Path, help="private game + saves (in-game install: cpc-modloader-data/default)")
+            command.add_argument("--profile-dir", type=Path, help="patched game + settings (saves stay in the installed game folder)")
         if name in {"check", "build", "run", "steam"}:
             command.add_argument("--luac", help="optional path to Lua 5.4's luac compiler")
             command.add_argument("--allow-unsupported-game", action="store_true", help="test an unverified game build (mod requirements still apply)")
