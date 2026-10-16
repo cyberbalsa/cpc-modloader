@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a reproducible loader problem or an unsupported game update.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For setup help, read the [installation steps](https://github.com/cyberbalsa/cpc-modloader#readme) and [troubleshooting](https://github.com/cyberbalsa/cpc-modloader/blob/main/docs/reference.md).
+        Redact Steam IDs, usernames, personal paths, and tokens from logs. Do not upload game files or saves.
+        Report security problems [privately](https://github.com/cyberbalsa/cpc-modloader/security/advisories/new).
+  - type: checkboxes
+    id: before-reporting
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched existing issues and read the setup/update instructions.
+          required: true
+        - label: I checked the latest loader release and included my installed version below.
+          required: true
+  - type: input
+    id: loader-version
+    attributes:
+      label: Loader version
+      description: Use the menu label or cpc-modloader --version. For source builds, include the commit.
+      placeholder: v0.1.2
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows (native)
+        - Linux (native)
+        - Linux or Steam Deck using Proton/Wine
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: Windows 11 24H2, or Arch Linux / KDE / Wayland
+    validations:
+      required: true
+  - type: textarea
+    id: game-version
+    attributes:
+      label: Game version and Steam build
+      description: Paste cpc-modloader inspect output, or the game version/build ID. If detection fails, include the error. Mention any compatibility override.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: launch-options
+    attributes:
+      label: Launch command or Steam Launch Options
+      description: Paste the exact command. Replace personal path segments with placeholders.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Mods and isolation result
+      description: List mod names/versions, what happens with an empty Mods folder, and whether the original game launches with Steam Launch Options cleared. Explain if you cannot test either case.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest repeatable example. Include a minimal patch manifest when the failure involves patching.
+      placeholder: |
+        1. Install ...
+        2. Launch with ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: State what should happen, what happens instead, and how often it occurs.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant logs or error text
+      description: Paste the relevant lines from cpc-modloader-data/launch-error.txt or default/game.log, and the patch error/report if available. Redact personal details. If no log was created, say so. Screenshots can supplement the text.
+      render: text
+    validations:
+      required: true

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from cpcmodloader.cli import main
-from cpcmodloader.launcher import (DATA_DIRECTORY, OWNER, build, default_profile, executable,
+from cpcmodloader.launcher import (DATA_DIRECTORY, build, default_profile, executable,
                                   external_environment, launcher_directory, profile_lock, run_game, steam_command)
 from cpcmodloader.patcher import PatchError, Plan
 

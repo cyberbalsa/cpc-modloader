@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation and troubleshooting
+    url: https://github.com/cyberbalsa/cpc-modloader/blob/main/docs/reference.md
+    about: Check launch options, compatibility warnings, saves, and log locations.
+  - name: Writing mods
+    url: https://github.com/cyberbalsa/cpc-modloader/blob/main/docs/modding.md
+    about: Read the patch format and version requirements.
+  - name: Report a security vulnerability
+    url: https://github.com/cyberbalsa/cpc-modloader/security/advisories/new
+    about: Send vulnerability details privately.

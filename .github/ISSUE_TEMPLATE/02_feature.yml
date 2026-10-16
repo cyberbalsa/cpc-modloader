@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a specific improvement to the loader.
+labels: [enhancement, needs-triage]
+body:
+  - type: checkboxes
+    id: existing
+    attributes:
+      label: Existing requests
+      options:
+        - label: I searched the issues and checked the current documentation.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe a concrete use case and the current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain what the user or mod author would do and what should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and scope
+      description: Describe any workaround and which platforms or loader components would be affected. Say if you do not know.
+    validations:
+      required: true

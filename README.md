@@ -29,4 +29,4 @@ Untested game updates stop before patching. New loader releases show a notice in
 
 Modded saves: `cpc-modloader-data/default/game/saves`. Original saves stay untouched. Clear Launch Options to play without the loader.
 
-[Writing mods](docs/modding.md) · [Troubleshooting](docs/reference.md)
+[Writing mods](docs/modding.md) · [Troubleshooting](docs/reference.md) · [Contributing](CONTRIBUTING.md)
