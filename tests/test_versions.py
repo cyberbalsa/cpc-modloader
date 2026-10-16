@@ -14,7 +14,7 @@ from cpcmodloader.cli import main
 from cpcmodloader.compatibility import GameVersion, detect_game, satisfies, version_tuple
 from cpcmodloader.launcher import build, executable, profile_lock
 from cpcmodloader.patcher import PatchError, compile_plan
-from cpcmodloader.updates import check_for_updates, fetch_latest, MAX_RESPONSE
+from cpcmodloader.updates import check_for_updates, fetch_latest, https_context, MAX_RESPONSE
 
 
 class CompatibilityTests(unittest.TestCase):
@@ -202,6 +202,25 @@ class UpdateTests(unittest.TestCase):
             request.return_value.__enter__.return_value.read.return_value = b" " * (MAX_RESPONSE + 1)
             with self.assertRaisesRegex(ValueError, "too large"):
                 fetch_latest()
+
+    def test_frozen_tls_uses_host_bundle_when_build_paths_are_missing(self):
+        with patch("ssl.create_default_context") as create, patch("pathlib.Path.is_file", return_value=True), \
+             patch.dict("os.environ", {}, clear=True):
+            context = create.return_value
+            context.cert_store_stats.return_value = {"x509_ca": 0}
+            self.assertIs(https_context(), context)
+            context.load_verify_locations.assert_called_once_with(cafile="/etc/ssl/certs/ca-certificates.crt")
+            context.load_verify_locations.reset_mock()
+            context.cert_store_stats.return_value = {"x509_ca": 100}
+            https_context()
+            context.load_verify_locations.assert_not_called()
+
+    def test_explicit_tls_configuration_is_respected(self):
+        with patch("ssl.create_default_context") as create, patch.dict("os.environ", {"SSL_CERT_FILE": "/custom/roots.pem"}):
+            context = create.return_value
+            context.cert_store_stats.return_value = {"x509_ca": 0}
+            https_context()
+            context.load_verify_locations.assert_not_called()
 
 
 if __name__ == "__main__":

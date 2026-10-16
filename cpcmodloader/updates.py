@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import ssl
 import tempfile
 import threading
 import time
@@ -37,12 +38,25 @@ class UpdateStatus:
         return asdict(self) | {"url": RELEASES_URL}
 
 
+def https_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    # Frozen OpenSSL may retain the build distro's certificate paths. Use the
+    # host's trust bundle when those paths are absent, keeping TLS verification.
+    if not context.cert_store_stats()["x509_ca"] and not any(os.environ.get(k) for k in ("SSL_CERT_FILE", "SSL_CERT_DIR")):
+        for path in ("/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/cert.pem",
+                     "/etc/pki/tls/certs/ca-bundle.crt", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"):
+            if Path(path).is_file():
+                context.load_verify_locations(cafile=path)
+                break
+    return context
+
+
 def fetch_latest() -> str:
     request = urllib.request.Request(API_URL, headers={
         "Accept": "application/vnd.github+json", "User-Agent": f"cpc-modloader/{__version__}",
         "X-GitHub-Api-Version": "2022-11-28",
     })
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+    with urllib.request.urlopen(request, timeout=TIMEOUT, context=https_context()) as response:
         raw = response.read(MAX_RESPONSE + 1)
     if len(raw) > MAX_RESPONSE:
         raise ValueError("release response too large")
