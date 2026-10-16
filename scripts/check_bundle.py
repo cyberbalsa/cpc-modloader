@@ -1,6 +1,8 @@
 """Exercise a frozen executable without distributing any game files."""
 
 from pathlib import Path
+import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,7 +15,10 @@ with tempfile.TemporaryDirectory(prefix="cpc bundle test ") as temporary:
     (scripts / "main.lua").write_text("return 1\n", encoding="utf-8")
     (scripts / "entities/3d").mkdir(parents=True)
     (scripts / "entities/3d/MainMenu.lua").write_text("function create(menu) end\n", encoding="utf-8")
-    mod = root / "Mods/test"
+    installed = root / "game" / program.name
+    shutil.copy2(program, installed)
+    (root / "game" / ("carparkcapital.exe" if sys.platform == "win32" else "carparkcapital")).write_bytes(b"test game")
+    mod = root / "game/Mods/test"
     mod.mkdir(parents=True)
     (mod / "cpcmodloader.toml").write_text('''[manifest]
 version = "1.0.0"
@@ -23,7 +28,14 @@ target = "main.lua"
 position = "prepend"
 payload = "print('bundled mod')"
 ''', encoding="utf-8")
-    result = subprocess.run([str(program), "check", "--game-dir", str(root / "game"), "--mods-dir", str(root / "Mods")], cwd=root, capture_output=True, text=True, timeout=60)
+    result = subprocess.run([str(installed), "build"], cwd=root, capture_output=True, text=True, timeout=60)
     print(result.stdout, end="")
     if result.returncode or "2 patched scripts" not in result.stdout:
         raise SystemExit(result.stderr or f"Unexpected result: {result.returncode}")
+    profile = root / "game/cpc-modloader-data/default/game"
+    report = json.loads((profile / "cpcmodloader-report.json").read_text())
+    assert report["mod_count"] == 1
+    assert (profile / "assets/models/cpcmodloader_overlay.glb").is_file()
+    assert not (profile / program.name).exists()
+    assert not (profile / "cpc-modloader-data").exists()
+    assert (scripts / "main.lua").read_text() == "return 1\n"

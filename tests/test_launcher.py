@@ -8,7 +8,8 @@ import unittest
 from unittest.mock import patch
 
 from cpcmodloader.cli import main
-from cpcmodloader.launcher import OWNER, build, external_environment, profile_lock, run_game
+from cpcmodloader.launcher import (DATA_DIRECTORY, OWNER, build, default_profile, executable,
+                                  external_environment, launcher_directory, profile_lock, run_game, steam_command)
 from cpcmodloader.patcher import PatchError, Plan
 
 
@@ -59,6 +60,67 @@ class LauncherTests(unittest.TestCase):
             with self.subTest(destination=destination), self.assertRaisesRegex(PatchError, "must not contain"):
                 with profile_lock(destination, self.game, self.mods):
                     pass
+
+    def test_in_game_profile_does_not_copy_itself_or_loader(self):
+        profile = self.game / DATA_DIRECTORY / "default"
+        mods = self.game / "Mods"
+        mods.mkdir()
+        (mods / "keep.txt").write_text("mod")
+        (self.game / "cpc-modloader.exe").write_bytes(b"loader")
+        (self.game / "cpc-modloader").write_bytes(b"loader")
+        with profile_lock(profile, self.game, mods):
+            directory = build(self.game, profile, Plan(), "test")
+            (directory / "saves/save.dat").write_bytes(b"save")
+            build(self.game, profile, Plan(), "test")
+            self.assertEqual((directory / "saves/save.dat").read_bytes(), b"save")
+            for name in (DATA_DIRECTORY, "Mods", "cpc-modloader", "cpc-modloader.exe"):
+                self.assertFalse((directory / name).exists())
+        self.assertEqual((mods / "keep.txt").read_text(), "mod")
+        with self.assertRaises(PatchError):
+            with profile_lock(self.game / DATA_DIRECTORY, self.game, mods):
+                pass
+
+    def test_frozen_paths_are_beside_loader(self):
+        with patch.object(sys, "frozen", True, create=True), patch.object(sys, "executable", str(self.game / "cpc-modloader.exe")):
+            base = launcher_directory()
+        self.assertEqual(base, self.game)
+        self.assertEqual(default_profile(base, self.game), self.game / DATA_DIRECTORY / "default")
+        self.assertEqual(default_profile(self.root / "standalone", self.game), self.root / "standalone/run/default")
+
+    def test_steam_command_preserves_wrappers_and_arguments(self):
+        wrapper = self.root / "runtime wrapper"
+        wrapper.write_bytes(b"wrapper")
+        game_exe = executable(self.game)
+        original = ["--", str(wrapper), "--verb=waitforexitandrun", "--", str(game_exe), "--name", "spaces and ; punctuation"]
+        game, index, command = steam_command(original)
+        self.assertEqual(game, self.game)
+        self.assertEqual(index, 3)
+        self.assertEqual(command, original[1:])
+        self.assertEqual(original[0], "--")
+        for invalid in ([], ["%command%"], [str(game_exe), str(game_exe)]):
+            with self.subTest(invalid=invalid), self.assertRaises(PatchError):
+                steam_command(invalid)
+
+    def test_steam_cli_builds_in_game_and_replaces_only_executable(self):
+        game_exe = executable(self.game)
+        wrapper = str(self.root / "wrapper")
+        with patch("cpcmodloader.cli.launcher_directory", return_value=self.game), \
+             patch("cpcmodloader.cli.run_game", return_value=7) as launch:
+            code = main(["steam", "--", wrapper, "--", str(game_exe), "--name", "two words"])
+        self.assertEqual(code, 7)
+        profile = self.game / DATA_DIRECTORY / "default"
+        self.assertEqual(launch.call_args.args[0], profile / "game")
+        self.assertEqual(launch.call_args.kwargs["command"],
+                         [wrapper, "--", str(profile / "game" / game_exe.name), "--name", "two words"])
+        self.assertEqual((self.game / "assets/scripts/main.lua").read_text(), "return 1\n")
+
+    def test_steam_relative_wrapper_keeps_original_location(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd(), prefix="cpc wrapper ") as temp:
+            wrapper = Path(temp) / "wrapper"
+            wrapper.write_bytes(b"wrapper")
+            relative = str(wrapper.relative_to(Path.cwd()))
+            _, _, command = steam_command([relative, "--", str(executable(self.game))])
+            self.assertEqual(command[0], str(wrapper.resolve()))
 
     def test_lock_prevents_second_process(self):
         script = "from pathlib import Path; from cpcmodloader.launcher import profile_lock; import sys\nwith profile_lock(*map(Path, sys.argv[1:])): pass"

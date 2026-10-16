@@ -8,6 +8,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,38 @@ from .patcher import PatchError, Plan, inside
 
 APP_ID = "3031880"
 OWNER = "cpcmodloader-profile.json"
+DATA_DIRECTORY = "cpc-modloader-data"
+
+
+def launcher_directory() -> Path:
+    """Frozen releases find Mods beside the executable, regardless of Steam's cwd."""
+    return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path.cwd()
+
+
+def default_profile(base: Path, game: Path) -> Path:
+    if base.resolve().is_relative_to(game.resolve()):
+        return game / DATA_DIRECTORY / "default"
+    return base / "run/default"
+
+
+def steam_command(arguments: list[str]) -> tuple[Path, int, list[str]]:
+    """Locate the native game inside %command%, keeping Steam's runtime wrappers."""
+    command = list(arguments[1:] if arguments[:1] == ["--"] else arguments)
+    names = {"carparkcapital.exe", "car park capital.exe"} if os.name == "nt" else {"carparkcapital"}
+    matches = [i for i, arg in enumerate(command) if Path(arg).name.lower() in names]
+    if len(matches) != 1:
+        raise PatchError("Steam command must contain the native Car Park Capital executable exactly once; use 'steam -- %command%'")
+    index = matches[0]
+    program = Path(command[index]).resolve()
+    game = validate_game(program.parent)
+    if not program.is_file() or program != executable(game).resolve():
+        raise PatchError(f"Steam game executable is missing or unsupported: {program}")
+    # The child's cwd is the private game. Preserve relative wrapper paths before moving.
+    for i in range(index):
+        if not command[i].startswith("-") and Path(command[i]).is_file():
+            command[i] = str(Path(command[i]).resolve())
+    command[index] = str(program)
+    return game, index, command
 
 
 def external_environment() -> dict[str, str]:
@@ -106,9 +139,14 @@ def copy_tree(source: Path, target: Path):
 @contextmanager
 def profile_lock(profile: Path, game: Path, mods: Path):
     profile = profile.resolve()
-    for other, name in [(game.resolve(), "game"), (mods.resolve(), "mods")]:
-        if profile.is_relative_to(other) or other.is_relative_to(profile):
-            raise PatchError(f"profile and {name} directories must not contain each other")
+    game = game.resolve()
+    data = game / DATA_DIRECTORY
+    if game.is_relative_to(profile) or (profile.is_relative_to(game) and
+                                      (profile == data or not profile.is_relative_to(data))):
+        raise PatchError(f"profile and game directories must not contain each other except beneath {DATA_DIRECTORY}")
+    mods = mods.resolve()
+    if profile.is_relative_to(mods) or mods.is_relative_to(profile):
+        raise PatchError("profile and mods directories must not contain each other")
     profile.mkdir(parents=True, exist_ok=True)
     owner = profile / OWNER
     if not owner.exists() and any(profile.iterdir()):
@@ -195,6 +233,8 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
     try:
         copy_tree(game / "assets", stage / "assets")
         for path in game.iterdir():
+            if path.name.lower() in {"cpc-modloader", "cpc-modloader.exe", "cpcmodloader.pyz"}:
+                continue
             if path.is_file():
                 if path.is_symlink():
                     raise PatchError(f"symlink in game root: {path}")
@@ -239,31 +279,45 @@ def build(game: Path, profile: Path, plan: Plan, syntax: str) -> Path:
             shutil.rmtree(stage)
 
 
-def run_game(directory: Path, arguments: list[str], log_path: Path, timeout: float | None = None) -> int:
-    program = executable(directory)
+def run_game(directory: Path, arguments: list[str], log_path: Path, timeout: float | None = None,
+             command: list[str] | None = None) -> int:
+    command = command if command is not None else [str(executable(directory)), *arguments]
     env = external_environment()
     env["SteamAppId"] = APP_ID
     env["SteamGameId"] = APP_ID
     if os.name != "nt":
         env["LD_LIBRARY_PATH"] = str(directory) + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     with log_path.open("wb") as log:
-        process = subprocess.Popen([str(program), *arguments], cwd=directory, env=env, stdout=log, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(command, cwd=directory, env=env, stdout=log, stderr=subprocess.STDOUT,
+                                   start_new_session=os.name != "nt")
+
+        def stop(force=False):
+            if os.name != "nt":
+                try:
+                    os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            elif force:
+                process.kill()
+            else:
+                process.terminate()
+
         try:
             return process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.terminate()
+            stop()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                process.kill()
+                stop(force=True)
                 process.wait()
             return 124
         except BaseException:
             if process.poll() is None:
-                process.terminate()
+                stop()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    process.kill()
+                    stop(force=True)
                     process.wait()
             raise

@@ -8,7 +8,8 @@ import subprocess
 import sys
 
 from . import __version__
-from .launcher import build, executable, find_game, profile_lock, run_game, syntax_check, validate_game
+from .launcher import (build, default_profile, executable, find_game, launcher_directory,
+                       profile_lock, run_game, steam_command, syntax_check, validate_game)
 from .patcher import PatchError, compile_plan, discover
 
 
@@ -18,24 +19,26 @@ def parser():
     commands = result.add_subparsers(dest="command", required=True)
     for name, description in (("inspect", "Inspect a game installation"), ("mods", "List enabled patch manifests"),
                               ("check", "Validate patches without building"), ("build", "Prepare an isolated modded game"),
-                              ("run", "Build and launch the modded game")):
+                              ("run", "Build and launch the modded game"),
+                              ("steam", "Build and launch using Steam's original command")):
         command = commands.add_parser(name, help=description)
         command.add_argument("--game-dir", type=Path, default=os.environ.get("CPC_GAME_DIR"), help="Steam game directory (auto-detected when omitted)")
-        command.add_argument("--mods-dir", type=Path, default=Path("Mods"), help="mod folders (default: ./Mods)")
-        if name in {"build", "run"}:
-            command.add_argument("--profile-dir", type=Path, default=Path("run/default"), help="private game + saves (default: ./run/default)")
-        if name in {"check", "build", "run"}:
+        command.add_argument("--mods-dir", type=Path, help="mod folders (default: Mods beside the loader)")
+        if name in {"build", "run", "steam"}:
+            command.add_argument("--profile-dir", type=Path, help="private game + saves (in-game install: cpc-modloader-data/default)")
+        if name in {"check", "build", "run", "steam"}:
             command.add_argument("--luac", help="optional path to Lua 5.4's luac compiler")
-        if name == "run":
+        if name in {"run", "steam"}:
             command.add_argument("--timeout", type=float, help="stop the game after N seconds (smoke tests; exit 124)")
-            command.add_argument("game_args", nargs=argparse.REMAINDER, help="game arguments after --")
+            command.add_argument("game_args", nargs=argparse.REMAINDER, help="game arguments, or Steam's original command, after --")
     return result
 
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
-        mods = args.mods_dir.resolve()
+        base = launcher_directory()
+        mods = (args.mods_dir or base / "Mods").resolve()
         if args.command == "mods":
             manifests = discover(mods)
             for manifest in manifests:
@@ -43,7 +46,13 @@ def main(argv=None) -> int:
             if not manifests:
                 print(f"No enabled manifests in {mods}")
             return 0
-        game = args.game_dir or find_game()
+        original_command = None
+        if args.command == "steam":
+            game, game_index, original_command = steam_command(args.game_args)
+            if args.game_dir and args.game_dir.resolve() != game:
+                raise PatchError("--game-dir must match the game in Steam's command")
+        else:
+            game = args.game_dir or (base if (base / "assets/scripts").is_dir() else find_game())
         if game is None:
             raise PatchError("game not found; pass --game-dir '/path/to/Car Park Capital'")
         game = validate_game(game)
@@ -59,8 +68,8 @@ def main(argv=None) -> int:
             print(f"  {event['patch']} -> {event['target']} ({event['applied']}/{event['matches']} matches)", flush=True)
         if args.command == "check":
             return 0
-        profile = args.profile_dir.resolve()
-        if args.command == "run" and args.timeout is not None and args.timeout <= 0:
+        profile = (args.profile_dir or default_profile(base, game)).resolve()
+        if args.command in {"run", "steam"} and args.timeout is not None and args.timeout <= 0:
             raise PatchError("--timeout must be positive")
         executable(game)
         with profile_lock(profile, game, mods):
@@ -73,7 +82,9 @@ def main(argv=None) -> int:
                 arguments = arguments[1:]
             log_path = profile / "game.log"
             print(f"Launching; game output: {log_path}", flush=True)
-            code = run_game(directory, arguments, log_path, args.timeout)
+            if original_command is not None:
+                original_command[game_index] = str(executable(directory))
+            code = run_game(directory, arguments, log_path, args.timeout, command=original_command)
             print(f"Game exited: {code}", flush=True)
             return code if code >= 0 else 128 - code
     except (PatchError, OSError, ValueError, subprocess.SubprocessError) as exc:
